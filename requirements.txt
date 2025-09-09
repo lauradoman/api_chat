@@ -2,5 +2,5 @@ fastapi==0.111.1
 uvicorn[standard]==0.23.1
 pydantic==2.11.0
 pytest==8.4.2
-spacy==3.6.1
+spacy==3.6.1 --only-binary :all:
 weasel==0.1.6
