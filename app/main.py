@@ -4,7 +4,7 @@ from app.services.debate_service import start_new_conversation, continue_convers
 
 app = FastAPI(title="Kopi Debate Bot", version="1.0")
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/", response_model=ChatResponse)
 
 def chat_endpoint(request: ChatRequest):
     if not request.message.strip():
