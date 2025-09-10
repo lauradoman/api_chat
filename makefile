@@ -17,12 +17,12 @@ test:
 	pytest tests/ -v
 
 run:
-	docker build -t kavak_api .
-	docker run -p 8000:8000 kavak_api
+	docker build -t chatBot_api .
+	docker run -p 8000:8000 chatBot_api
 
 down:
 	-docker ps -q | xargs -r docker stop
 
 clean:
 	-docker ps -a -q | xargs -r docker rm
-	-docker images -q kavak_api | xargs -r docker rmi
+	-docker images -q chatBot_api | xargs -r docker rmi
