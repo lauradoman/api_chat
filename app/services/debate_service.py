@@ -1,110 +1,128 @@
-
-# app/services/debate_service.py
 import uuid
-from typing import List, Dict
-import spacy
-from app.models.api_models import Message, ChatResponse
-from app.services.response_templates import generate_dynamic_response
+import traceback
+from typing import List, Dict, Any
+from ..services.state_service import state_service
+from ..config import settings
+from ..models.api_models import Message, ChatResponse, Link
 
-# --- NLP ---
-nlp = spacy.load("es_core_news_sm")  # Modelo español
+import google.generativeai as genai
 
-# --- Historial de conversaciones ---
-conversations: Dict[str, List[Message]] = {}
-MAX_HISTORY = 5  # últimos 5 mensajes por rol
-
-# --- Funciones de extracción de tema ---
-
-def extract_topic(text: str) -> tuple[str, bool]:
-    doc = nlp(text)
-    topic = ""
-    has_adj = False
-
-    for token in doc:
-        # Sustantivo o nombre propio principal
-        if token.pos_ in ("NOUN", "PROPN"):
-            # Añadir determinantes si existen
-            det = " ".join([child.text for child in token.children if child.dep_ == "det"])
-            topic = (det + " " + token.text).strip() if det else token.text
-
-            # Adjetivos dependientes del sustantivo
-            adj_children = [child.text for child in token.children if child.pos_ == "ADJ"]
-            if adj_children:
-                topic += " " + " ".join(adj_children)
-                has_adj = True
-            else:
-                # Adjetivo predicativo ligado al verbo "ser"
-                for tok in doc:
-                    if tok.pos_ == "ADJ" and any(child.dep_ == "cop" and child.lemma_ == "ser" for child in tok.head.children):
-                        topic += " " + tok.text
-                        has_adj = True
-                        break
-
-            return topic, has_adj
-
-    # Si no hay sustantivo principal, devolver los primeros tokens
-    return " ".join([t.text for t in doc[:3]]), False
+genai.configure(api_key=settings.GOOGLE_API_KEY)
 
 
+class DebateService:
 
-# --- Funciones de decisión de postura ---
+    def _parse_initial_stance(self, message: str) -> str:
+        if "," in message:
+            return message.split(",")[0].strip()
+        return message
 
-def decide_bot_posture(user_message: str, topic_data: tuple) -> str:
-    """Genera respuesta del bot usando plantilla dinámica"""
-    topic, has_adj = topic_data
-    return generate_dynamic_response(topic, has_adj)
+    def _invert_stance(self, stance: str) -> str:
+        return f"No es cierto que {stance}"
 
-# --- Funciones de conversación ---
+    def _get_system_prompt(self, stance: str) -> str:
+        return f"""
+Eres un chatbot experto en debates llamado Kopi. Tu único propósito es argumentar 
+de manera persuasiva y breve un punto de vista específico y convencer a tu contraparte humana.
 
-def start_new_conversation(user_message: str) -> ChatResponse:
-    """Inicia conversación nueva"""
-    conversation_id = str(uuid.uuid4())
-    topic_data = extract_topic(user_message)
-    bot_posture = decide_bot_posture(user_message, topic_data)
+La postura que debes defender incondicionalmente es: "{stance}"
 
-    user_msg = Message(role="user", message=user_message)
-    bot_msg = Message(role="bot", message=bot_posture)
+Reglas Fundamentales:
+1. Nunca Cedas
+2. Mantente en el Tema
+3. Sé Persuasivo
+4. Reconoce y Contraataca
+5. Tono Confiado y en Español
+6. Responde solo con 1 o 2 frases, conciso y directo
+7. Siempre debes estar en la postura contraria a la del usuario
+"""
 
-    conversations[conversation_id] = [user_msg, bot_msg]
+    def _get_or_create_chat(self, conversation_id: str, system_prompt: str, history: List[Dict[str, str]] = None):
+        if not hasattr(self, "_sessions"):
+            self._sessions: Dict[str, Any] = {}
 
-    return ChatResponse(
-        conversation_id=conversation_id,
-        message=conversations[conversation_id]
-    )
+        if conversation_id in self._sessions:
+            return self._sessions[conversation_id]
+
+        model = genai.GenerativeModel(
+            model_name=settings.GEMINI_MODEL_NAME,
+            system_instruction=system_prompt
+        )
+
+        chat = model.start_chat(history=history or [])
+        self._sessions[conversation_id] = chat
+        return chat
+
+    def _get_bot_response(self, conversation_id: str, user_message: str, system_prompt: str) -> str:
+        try:
+            chat = self._get_or_create_chat(conversation_id, system_prompt)
+            response = chat.send_message(user_message)
+            response_text = '. '.join(response.text.split('. ')[:2])
+            return response_text
+        except Exception as e:
+            print(f"Error al contactar Gemini: {e}")
+            traceback.print_exc()
+            return "He perdido el hilo de mis pensamientos, pero sigo firme en mi postura. ¿Qué decías?"
+
+    def _build_hateoas_links(self, conversation_id: str) -> List[Link]:
+        """
+        Crea enlaces HATEOAS para navegación de la API.
+        """
+        return [
+            Link(rel="self", href=f"/debate?conversation_id={conversation_id}"),
+            Link(rel="continue", href=f"/debate?conversation_id={conversation_id}"),
+            Link(rel="new", href="/debate")
+        ]
+
+    async def start_new_conversation(self, user_message: str) -> ChatResponse:
+        conversation_id = str(uuid.uuid4())
+        stance = self._parse_initial_stance(user_message)
+        opposite_stance = self._invert_stance(stance)
+        system_prompt = self._get_system_prompt(opposite_stance)
+
+        full_history = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        bot_message_content = self._get_bot_response(conversation_id, user_message, system_prompt)
+        full_history.append({"role": "assistant", "content": bot_message_content})
+        state_service.save_conversation(conversation_id, full_history)
+
+        api_messages = [
+            Message(role="user", message=user_message),
+            Message(role="bot", message=bot_message_content)
+        ]
+
+        links = self._build_hateoas_links(conversation_id)
+
+        return ChatResponse(conversation_id=conversation_id, messages=api_messages, links=links)
+
+    async def continue_conversation(self, conversation_id: str, user_message: str) -> ChatResponse:
+        if not state_service.conversation_exists(conversation_id):
+            return await self.start_new_conversation(user_message)
+
+        full_history = state_service.load_conversation(conversation_id)
+        system_prompt = next((msg["content"] for msg in full_history if msg["role"] == "system"), None)
+        if not system_prompt:
+            system_prompt = "Eres un chatbot experto en debates, sé persuasivo, conciso, directo y mantente en español."
+
+        bot_message_content = self._get_bot_response(conversation_id, user_message, system_prompt)
+
+        full_history.append({"role": "user", "content": user_message})
+        full_history.append({"role": "assistant", "content": bot_message_content})
+        state_service.save_conversation(conversation_id, full_history)
+
+        api_messages = []
+        for msg in full_history[-5:]:
+            if msg["role"] in ["user", "assistant"]:
+                api_messages.append(
+                    Message(role="bot" if msg["role"] == "assistant" else "user", message=msg["content"])
+                )
+
+        links = self._build_hateoas_links(conversation_id)
+
+        return ChatResponse(conversation_id=conversation_id, messages=api_messages, links=links)
 
 
-def continue_conversation(conversation_id: str, user_message: str) -> ChatResponse:
-    """Continúa conversación existente"""
-    if conversation_id not in conversations:
-        return start_new_conversation(user_message)
-
-    user_msg = Message(role="user", message=user_message)
-    conversations[conversation_id].append(user_msg)
-
-    topic_data = extract_topic(user_message)
-    bot_msg = Message(role="bot", message=decide_bot_posture(user_message, topic_data))
-    conversations[conversation_id].append(bot_msg)
-
-    conversations[conversation_id] = limit_history(conversations[conversation_id], MAX_HISTORY)
-
-    return ChatResponse(
-        conversation_id=conversation_id,
-        message=conversations[conversation_id]
-    )
-
-
-def limit_history(history: List[Message], max_per_role: int) -> List[Message]:
-    """Limita los mensajes por rol manteniendo orden cronológico"""
-    user_msgs = [m for m in history if m.role == "user"][-max_per_role:]
-    bot_msgs = [m for m in history if m.role == "bot"][-max_per_role:]
-
-    combined = []
-    i, j = 0, 0
-    for m in history:
-        if m.role == "user" and i < len(user_msgs):
-            combined.append(user_msgs[i])
-            i += 1
-        elif m.role == "bot" and j < len(bot_msgs):
-            combined.append(bot_msgs[j])
-            j += 1
-    return combined
+debate_service = DebateService()

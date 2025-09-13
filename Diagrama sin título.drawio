@@ -1,0 +1,19 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.2.15 Chrome/134.0.6998.205 Electron/35.2.1 Safari/537.36" version="26.2.15">
+  <diagram name="Página-1" id="Eg0ruvTl86AHWMbpcqEL">
+    <mxGraphModel dx="840" dy="538" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="cPnC-Q2NTBlNWOS3g7Tf-1" value="" style="shape=mxgraph.networks2.icon;aspect=fixed;fillColor=#EDEDED;strokeColor=#000000;gradientColor=#5B6163;network2IconShadow=1;network2bgFillColor=none;network2Icon=mxgraph.networks2.user_female;network2IconXOffset=-0.0011;network2IconYOffset=-0.003;network2IconW=0.8096;network2IconH=0.994;" vertex="1" parent="1">
+          <mxGeometry x="50" y="180" width="110.48" height="135.64" as="geometry" />
+        </mxCell>
+        <mxCell id="cPnC-Q2NTBlNWOS3g7Tf-2" value="" style="shape=mxgraph.signs.tech.mail;html=1;pointerEvents=1;fillColor=#6a00ff;strokeColor=#3700CC;verticalLabelPosition=bottom;verticalAlign=top;align=center;sketch=0;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="220" y="210.32" width="99" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="cPnC-Q2NTBlNWOS3g7Tf-3" value="co" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="100" y="308" width="40" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

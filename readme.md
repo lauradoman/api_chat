@@ -6,7 +6,7 @@ Kopi Debate Bot es una API REST construida con **FastAPI** que permite iniciar y
 
 ## 🗂 Estructura del proyecto
 
-kavak/
+chatBot/
 │
 ├─ app/
 │ ├─ main.py
@@ -73,13 +73,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 1. Construye la imagen
 ```bash
-sudo docker build -t kavak_api .
+sudo docker build -t chatBot_api .
 ```
 
 2. Corre el contenedor
 
 ``` bash
-docker run -p 8000:8000 kavak_api .
+docker run -p 8000:8000 chatBot_api .
 ```
 
 3. La API estara disponible en:
@@ -96,8 +96,7 @@ http://localhost:8000/docs
 
 # 🔧 Endpoints principales
 
-POST /chat
-
+POST /
 Envía un mensaje al bot y recibe la respuesta.
 
 Request body (JSON):
